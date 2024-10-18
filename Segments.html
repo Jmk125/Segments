@@ -6,7 +6,7 @@
     <title>Interactive Bar Segments with Pen Tool</title>
     <style>
         canvas {
-            border: 1px solid black;
+            border: 0px solid black;
         }
         .controls {
             margin-top: 10px;
@@ -50,7 +50,7 @@
 </head>
 <body>
 
-<canvas id="barCanvas" width="1000" height="400"></canvas>
+<canvas id="barCanvas" width="1500" height="500"></canvas>
 <div class="controls">
     <button id="addSegment">+</button>
     <button id="undoBtn">Undo</button>
@@ -106,6 +106,13 @@
     let textBoxes = [];
     let draggingTextBox = null;
     const edgeThreshold = 5;
+
+    // Custom color palette for random selection
+    const customColors = [
+        '#1f2f56', '#2c3e70', '#3b4f85', '#4c6099', '#5b70ad', '#6b80c0', '#7a91d4',
+        '#8ba2e7', '#9bb3fa', '#acbdf0', '#1c1e20', '#2e3133', '#404447', '#525659',
+        '#63676b', '#767a7e', '#888c90', '#9a9ea2', '#acb0b4', '#bec2c6'
+    ];
 
     // Draw segments on canvas
     function drawSegments() {
@@ -355,7 +362,7 @@
         drawSegments();
     }
 
-    // Add a new segment
+    // Add a new segment and change one half to a custom color
     document.getElementById('addSegment').addEventListener('click', () => {
         saveState();
         let largestSegment = segments.reduce((a, b) => (a.width > b.width ? a : b));
@@ -364,12 +371,12 @@
         let firstHalf = {
             start: largestSegment.start,
             width: largestSegment.width / 2,
-            color: largestSegment.color
+            color: largestSegment.color // Keep the original color
         };
         let secondHalf = {
             start: splitPoint,
             width: largestSegment.width / 2,
-            color: largestSegment.color
+            color: customColors[Math.floor(Math.random() * customColors.length)] // Random custom color
         };
 
         let index = segments.indexOf(largestSegment);
