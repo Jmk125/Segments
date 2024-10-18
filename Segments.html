@@ -14,6 +14,10 @@
         .controls button {
             margin-right: 5px;
         }
+        #penToolBtn.active {
+            background-color: #00aaff;
+            color: white;
+        }
         .color-picker {
             display: none;
             position: absolute;
@@ -50,7 +54,7 @@
 </head>
 <body>
 
-<canvas id="barCanvas" width="1000" height="800"></canvas>
+<canvas id="barCanvas" width="1200" height="800"></canvas>
 <div class="controls">
     <button id="addSegment">+</button>
     <button id="undoBtn">Undo</button>
@@ -97,7 +101,7 @@
     const bufferCtx = bufferCanvas.getContext('2d');
     const colorPicker = document.getElementById('colorPicker');
     const undoStack = [];  // To store states for undo functionality
-    let segments = [{ start: 100, width: 400, color: '#1f2f56' }]; // Start with a bar that doesn't fill the canvas
+    let segments = [{ start: 100, width: 400, color: '#1f2f56' }]; // Start with a dark blue color
     let dragging = null;
     let selectedSegment = null;
     let resizingEnd = null;  // Track if resizing the bar ends
@@ -155,15 +159,32 @@
         }
     });
 
-    // Toggle pen tool
-    document.getElementById('penToolBtn').addEventListener('click', () => {
-        penToolActive = !penToolActive;
-        if (penToolActive) {
-            console.log('Pen tool activated');
-        } else {
-            console.log('Pen tool deactivated');
+    // Toggle pen tool with the button click
+    document.getElementById('penToolBtn').addEventListener('click', (e) => {
+        togglePenTool(e.target);
+    });
+
+    // Handle Escape key to deactivate the pen tool
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && penToolActive) {
+            togglePenTool(document.getElementById('penToolBtn'), true); // Force pen tool off
         }
     });
+
+    // Function to toggle pen tool and update visuals
+    function togglePenTool(button, forceOff = false) {
+        penToolActive = forceOff ? false : !penToolActive;
+
+        if (penToolActive) {
+            button.classList.add('active'); // Change button appearance
+            button.innerText = 'Pen Tool (On)';
+            canvas.style.cursor = 'crosshair'; // Change cursor to crosshair
+        } else {
+            button.classList.remove('active'); // Revert button appearance
+            button.innerText = 'Toggle Pen Tool';
+            canvas.style.cursor = 'default'; // Revert cursor to default
+        }
+    }
 
     // Handle drawing with the pen tool
     canvas.addEventListener('mousedown', (e) => {
@@ -187,14 +208,6 @@
         if (penToolActive && drawing) {
             drawing = false;
             bufferCtx.closePath();
-        }
-    });
-
-    // Handle the Escape key to deactivate the pen tool
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            penToolActive = false;
-            console.log('Pen tool deactivated by Escape');
         }
     });
 
