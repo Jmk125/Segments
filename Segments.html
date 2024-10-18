@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Bar Segments with Pen Tool</title>
     <style>
         canvas {
-            /* Removed the border for a clean look */
+            border: 1px solid black;
         }
         .controls {
             margin-top: 10px;
@@ -24,7 +24,7 @@
             background-color: white;
             border: 1px solid #ccc;
             padding: 10px;
-            width: 230px; /* To fit two rows of 10 color options */
+            width: 230px;
         }
         .color-picker div {
             display: inline-block;
@@ -36,11 +36,7 @@
             transition: transform 0.2s;
         }
         .color-picker div:hover {
-            transform: scale(1.2); /* Add hover effect */
-        }
-        .color-picker button {
-            display: block;
-            margin-top: 10px;
+            transform: scale(1.2);
         }
         .label-text {
             position: absolute;
@@ -54,7 +50,7 @@
 </head>
 <body>
 
-<canvas id="barCanvas" width="1200" height="800"></canvas>
+<canvas id="barCanvas" width="1000" height="400"></canvas>
 <div class="controls">
     <button id="addSegment">+</button>
     <button id="undoBtn">Undo</button>
@@ -65,7 +61,6 @@
 </div>
 
 <div class="color-picker" id="colorPicker">
-    <!-- 20 shades of dark blues, blues, and greys -->
     <div style="background-color: #1f2f56;"></div>
     <div style="background-color: #2c3e70;"></div>
     <div style="background-color: #3b4f85;"></div>
@@ -95,45 +90,41 @@
 <script>
     const canvas = document.getElementById('barCanvas');
     const ctx = canvas.getContext('2d');
-    const bufferCanvas = document.createElement('canvas');  // Buffer canvas to preserve drawings
+    const bufferCanvas = document.createElement('canvas');
     bufferCanvas.width = canvas.width;
     bufferCanvas.height = canvas.height;
     const bufferCtx = bufferCanvas.getContext('2d');
+    const undoStack = [];
     const colorPicker = document.getElementById('colorPicker');
-    const undoStack = [];  // To store states for undo functionality
-    let segments = [{ start: 100, width: 400, color: '#1f2f56' }]; // Start with a dark blue color
-    let dragging = null;
+    let segments = [{ start: 100, width: 800, color: '#1f2f56' }];
+    let draggingSegment = null;
     let selectedSegment = null;
-    let resizingEnd = null;  // Track if resizing the bar ends
-    let draggingAll = false;  // Track if dragging all segments
-    let draggingText = null;  // Track if text box is being dragged
-    const textBoxes = [];  // Store text boxes on canvas
-    let doubleClickActive = false; // Track if we are in double-click mode for dragging
-    let penToolActive = false; // Track if the pen tool is active
-    let drawing = false; // Track if the user is drawing with the pen tool
+    let draggingEdge = null;
+    let lastMouseX = 0;
+    let penToolActive = false;
+    let drawing = false;
+    let textBoxes = [];
+    let draggingTextBox = null;
+    const edgeThreshold = 5;
 
-    // Draw all segments
+    // Draw segments on canvas
     function drawSegments() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Restore the preserved drawings from the buffer canvas
-        ctx.drawImage(bufferCanvas, 0, 0);
+        ctx.drawImage(bufferCanvas, 0, 0); // Preserve drawings
         segments.forEach(segment => {
             ctx.fillStyle = segment.color;
-            ctx.fillRect(segment.start, 480, segment.width, 40); // Bar positioned vertically in the middle
-            ctx.strokeStyle = "black";
-            ctx.strokeRect(segment.start, 480, segment.width, 40); // Add black outline
+            ctx.fillRect(segment.start, 180, segment.width, 40);
+            ctx.strokeRect(segment.start, 180, segment.width, 40);
         });
     }
 
-    // Save the current state to the undo stack
+    // Save current state to undo stack
     function saveState() {
-        // Capture the full canvas drawing from the buffer, not the main canvas
-        const imageData = bufferCtx.getImageData(0, 0, canvas.width, canvas.height); 
-
+        const imageData = bufferCtx.getImageData(0, 0, canvas.width, canvas.height); // Buffer for drawings
         undoStack.push({
             segments: JSON.parse(JSON.stringify(segments)),
             textBoxes: textBoxes.map(tb => ({ text: tb.innerText, x: tb.style.left, y: tb.style.top })),
-            canvasData: imageData // Save the buffer data for the undo stack
+            canvasData: imageData
         });
     }
 
@@ -143,13 +134,12 @@
             const { segments: savedSegments, textBoxes: savedTextBoxes, canvasData } = undoStack.pop();
             segments = savedSegments;
 
-            // Restore canvas drawings from the buffer canvas
-            bufferCtx.putImageData(canvasData, 0, 0);  // Restore to buffer
-            drawSegments();  // Draw buffer and segments
+            bufferCtx.putImageData(canvasData, 0, 0); // Restore drawing from buffer
+            drawSegments();
 
-            // Clear existing text boxes and reload them from saved state
+            // Clear and reload text boxes
             textBoxes.forEach(tb => tb.remove());
-            textBoxes.length = 0;
+            textBoxes = [];
             savedTextBoxes.forEach(({ text, x, y }) => {
                 const textBox = createTextBox(text, x, y);
                 textBoxes.push(textBox);
@@ -159,48 +149,46 @@
         }
     });
 
-    // Toggle pen tool with the button click
+    // Pen Tool toggle
     document.getElementById('penToolBtn').addEventListener('click', (e) => {
         togglePenTool(e.target);
     });
 
-    // Handle Escape key to deactivate the pen tool
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && penToolActive) {
-            togglePenTool(document.getElementById('penToolBtn'), true); // Force pen tool off
+            togglePenTool(document.getElementById('penToolBtn'), true);
         }
     });
 
-    // Function to toggle pen tool and update visuals
+    // Toggle pen tool and update UI
     function togglePenTool(button, forceOff = false) {
         penToolActive = forceOff ? false : !penToolActive;
-
         if (penToolActive) {
-            button.classList.add('active'); // Change button appearance
+            button.classList.add('active');
             button.innerText = 'Pen Tool (On)';
-            canvas.style.cursor = 'crosshair'; // Change cursor to crosshair
+            canvas.style.cursor = 'crosshair';
         } else {
-            button.classList.remove('active'); // Revert button appearance
+            button.classList.remove('active');
             button.innerText = 'Toggle Pen Tool';
-            canvas.style.cursor = 'default'; // Revert cursor to default
+            canvas.style.cursor = 'default';
         }
     }
 
-    // Handle drawing with the pen tool
+    // Start drawing with pen tool
     canvas.addEventListener('mousedown', (e) => {
         if (penToolActive) {
-            saveState(); // Save the current state before starting to draw
+            saveState();
             drawing = true;
             bufferCtx.beginPath();
-            bufferCtx.moveTo(e.offsetX, e.offsetY);  // Start drawing on the buffer canvas
+            bufferCtx.moveTo(e.offsetX, e.offsetY);
         }
     });
 
     canvas.addEventListener('mousemove', (e) => {
         if (penToolActive && drawing) {
             bufferCtx.lineTo(e.offsetX, e.offsetY);
-            bufferCtx.stroke();  // Draw on the buffer canvas
-            drawSegments();  // Update the canvas, preserving drawings and segments
+            bufferCtx.stroke();
+            drawSegments();
         }
     });
 
@@ -211,27 +199,163 @@
         }
     });
 
-    // Check if user clicked on an edge to drag it
+    // Check if clicked on an edge for resizing
     function hitTestEdge(x) {
-        let threshold = 5;
-        if (Math.abs(x - segments[0].start) <= threshold) {
-            resizingEnd = 'left';
-            return 0;  // Left end of the bar
+        // Check for left edge of first segment
+        if (Math.abs(x - segments[0].start) <= edgeThreshold) {
+            return { index: 0, edge: 'left' };
         }
-        if (Math.abs(x - (segments[segments.length - 1].start + segments[segments.length - 1].width)) <= threshold) {
-            resizingEnd = 'right';
-            return segments.length - 1;  // Right end of the bar
+
+        // Check for right edge of last segment
+        if (Math.abs(x - (segments[segments.length - 1].start + segments[segments.length - 1].width)) <= edgeThreshold) {
+            return { index: segments.length - 1, edge: 'right' };
         }
+
+        // Check between segments
         for (let i = 0; i < segments.length - 1; i++) {
             let seg = segments[i];
-            if (Math.abs(x - (seg.start + seg.width)) <= threshold) {
-                return i;  // Return index of the segment divider being dragged
+            if (Math.abs(x - (seg.start + seg.width)) <= edgeThreshold) {
+                return { index: i, edge: 'between' };
             }
         }
         return null;
     }
 
-    // Add segment when the "+" button is clicked
+    // Check if clicked on a segment
+    function hitTestSegment(x) {
+        for (let i = 0; i < segments.length; i++) {
+            let seg = segments[i];
+            if (x >= seg.start && x <= seg.start + seg.width) {
+                return i;
+            }
+        }
+        return null;
+    }
+
+    // Handle mousedown for segment dragging/resizing
+    canvas.addEventListener('mousedown', (e) => {
+        if (!penToolActive) {
+            let x = e.offsetX;
+            draggingEdge = hitTestEdge(x);
+
+            if (draggingEdge === null) {
+                draggingSegment = hitTestSegment(x);
+            }
+
+            if (draggingSegment !== null || draggingEdge !== null) {
+                lastMouseX = x;
+                saveState();
+            }
+        }
+    });
+
+    // Handle mousemove for dragging/resizing
+    canvas.addEventListener('mousemove', (e) => {
+        if (!penToolActive) {
+            let x = e.offsetX;
+            let deltaX = x - lastMouseX;
+
+            if (draggingEdge !== null && deltaX !== 0) {
+                if (draggingEdge.edge === 'left') {
+                    resizeLeftEdge(draggingEdge.index, deltaX);
+                } else if (draggingEdge.edge === 'right') {
+                    resizeRightEdge(draggingEdge.index, deltaX);
+                } else if (draggingEdge.edge === 'between') {
+                    resizeAdjacentSegments(draggingEdge.index, deltaX);
+                }
+                lastMouseX = x;
+            }
+
+            if (draggingSegment !== null && deltaX !== 0) {
+                if (deltaX > 0) {
+                    moveSegmentsRight(deltaX);
+                } else {
+                    moveSegmentsLeft(deltaX);
+                }
+                lastMouseX = x;
+            }
+        }
+    });
+
+    // Stop dragging
+    canvas.addEventListener('mouseup', () => {
+        draggingSegment = null;
+        draggingEdge = null;
+    });
+
+    // Handle segment resizing between segments
+    function resizeAdjacentSegments(edgeIndex, deltaX) {
+        let segment = segments[edgeIndex];
+        let nextSegment = segments[edgeIndex + 1];
+        let totalWidth = segment.width + nextSegment.width;
+        let newWidth = segment.width + deltaX;
+
+        if (newWidth >= 0 && newWidth <= totalWidth) {
+            segment.width = newWidth;
+            nextSegment.width = totalWidth - newWidth;
+            nextSegment.start = segment.start + segment.width;
+            drawSegments();
+        }
+    }
+
+    // Resize left edge of the first segment
+    function resizeLeftEdge(segmentIndex, deltaX) {
+        let segment = segments[segmentIndex];
+        let newStart = segment.start + deltaX;
+        let newWidth = segment.width - deltaX;
+
+        if (newWidth >= 10) {
+            segment.start = newStart;
+            segment.width = newWidth;
+            drawSegments();
+        }
+    }
+
+    // Resize right edge of the last segment
+    function resizeRightEdge(segmentIndex, deltaX) {
+        let segment = segments[segmentIndex];
+        let newWidth = segment.width + deltaX;
+
+        if (newWidth >= 10) {
+            segment.width = newWidth;
+            drawSegments();
+        }
+    }
+
+    // Move segments to the right
+    function moveSegmentsRight(deltaX) {
+        let segment = segments[draggingSegment];
+        let leftSegment = segments[draggingSegment - 1];
+
+        for (let i = draggingSegment; i < segments.length; i++) {
+            segments[i].start += deltaX;
+        }
+
+        if (leftSegment) {
+            leftSegment.width += deltaX;
+        }
+
+        drawSegments();
+    }
+
+    // Move segments to the left
+    function moveSegmentsLeft(deltaX) {
+        let segment = segments[draggingSegment];
+        let rightSegment = segments[draggingSegment + 1];
+
+        for (let i = draggingSegment; i >= 0; i--) {
+            segments[i].start += deltaX;
+        }
+
+        if (rightSegment) {
+            rightSegment.width -= deltaX;
+            rightSegment.start = segment.start + segment.width;
+        }
+
+        drawSegments();
+    }
+
+    // Add a new segment
     document.getElementById('addSegment').addEventListener('click', () => {
         saveState();
         let largestSegment = segments.reduce((a, b) => (a.width > b.width ? a : b));
@@ -248,150 +372,116 @@
             color: largestSegment.color
         };
 
-        // Replace the old segment with the two new ones
         let index = segments.indexOf(largestSegment);
         segments.splice(index, 1, firstHalf, secondHalf);
         drawSegments();
     });
 
-    // Handle mousedown for dragging or resizing
-    canvas.addEventListener('mousedown', (e) => {
-        if (!penToolActive) { // Only allow bar manipulation when pen tool is off
-            let x = e.offsetX;
-            dragging = hitTestEdge(x);
-            if (dragging !== null || resizingEnd !== null) {
-                saveState();  // Save state before dragging starts
-            }
-            if (doubleClickActive && dragging !== null) {
-                draggingAll = true;
-            }
-        }
-    });
-
-    // Handle single-click dragging (adjust the width of adjacent segments) or resizing bar ends
-    canvas.addEventListener('mousemove', (e) => {
-        if (!penToolActive) { // Only allow bar manipulation when pen tool is off
-            if (dragging !== null && !draggingAll && resizingEnd === null) {
-                let x = e.offsetX;
-                let segment = segments[dragging];
-                let nextSegment = segments[dragging + 1];
-                let totalWidth = segment.width + nextSegment.width;
-                let newWidth = x - segment.start;
-
-                // Adjust the widths while keeping total size constant
-                if (newWidth >= 0 && newWidth <= totalWidth) {
-                    segment.width = newWidth;
-                    nextSegment.width = totalWidth - newWidth;
-                    nextSegment.start = segment.start + segment.width;
-                    drawSegments();
-                }
-            }
-
-            // Handle resizing bar ends
-            if (resizingEnd === 'left') {
-                let firstSegment = segments[0];
-                let newStart = e.offsetX;
-                if (newStart >= 0 && newStart <= firstSegment.start + firstSegment.width - 10) {  // Prevent shrinking too far
-                    firstSegment.width += (firstSegment.start - newStart);
-                    firstSegment.start = newStart;
-                    drawSegments();
-                }
-            }
-
-            if (resizingEnd === 'right') {
-                let lastSegment = segments[segments.length - 1];
-                let newEnd = e.offsetX;
-                let newWidth = newEnd - lastSegment.start;
-                if (newWidth >= 10) {  // Prevent shrinking too far
-                    lastSegment.width = newWidth;
-                    drawSegments();
-                }
-            }
-
-            // Handle dragging all segments (double-click and hold)
-            if (draggingAll) {
-                let x = e.offsetX;
-                let segment = segments[dragging];
-                let nextSegment = segments[dragging + 1];
-                let deltaX = x - (segment.start + segment.width);
-
-                // Move the segments to the right (or left) while growing/shrinking the adjacent one
-                for (let i = dragging + 1; i < segments.length; i++) {
-                    segments[i].start += deltaX;
-                }
-                segment.width += deltaX;  // Grow the adjacent segment
-                drawSegments();
-            }
-
-            // Handle dragging text boxes
-            if (draggingText) {
-                draggingText.style.left = e.pageX + 'px';
-                draggingText.style.top = e.pageY + 'px';
-            }
-        }
-    });
-
-    // Handle mouseup to stop dragging
-    canvas.addEventListener('mouseup', () => {
-        if (dragging !== null || resizingEnd !== null || draggingAll) {
-            saveState();  // Save state after dragging completes
-        }
-        dragging = null;
-        draggingAll = false;
-        resizingEnd = null;
-        doubleClickActive = false;  // Reset double-click state
-    });
-
-    // Handle double-click for dragging all segments at once (but only when holding)
+    // Handle double-click to open color picker or delete segment
     canvas.addEventListener('dblclick', (e) => {
-        if (!penToolActive) { // Only allow bar manipulation when pen tool is off
-            let x = e.offsetX;
-            dragging = hitTestEdge(x);
-            if (dragging !== null) {
-                saveState();  // Save state before double-click action
-                doubleClickActive = true;  // Activate double-click dragging mode
-            } else {
-                selectedSegment = segments.find(seg => x >= seg.start && x <= seg.start + seg.width);
-                if (selectedSegment) {
-                    colorPicker.style.display = 'block';
-                    colorPicker.style.left = e.pageX + 'px';
-                    colorPicker.style.top = e.pageY + 'px';
-                }
-            }
+        let x = e.offsetX;
+        selectedSegment = hitTestSegment(x);
+        if (selectedSegment !== null) {
+            colorPicker.style.display = 'block';
+            colorPicker.style.left = e.pageX + 'px';
+            colorPicker.style.top = e.pageY + 'px';
         }
     });
 
-    // Handle mouseup to stop dragging
-    canvas.addEventListener('mouseup', () => {
-        dragging = null;
-        draggingAll = false;
-        resizingEnd = null;
-        doubleClickActive = false;  // Reset double-click state
+    // Handle color picker selection
+    document.querySelectorAll('.color-picker div').forEach(colorBox => {
+        colorBox.addEventListener('click', (e) => {
+            if (selectedSegment !== null) {
+                segments[selectedSegment].color = e.target.style.backgroundColor;
+                drawSegments();
+                colorPicker.style.display = 'none';
+            }
+        });
     });
 
-    // Create a text box and add it to the document
+    // Delete segment functionality
+    document.getElementById('deleteSegment').addEventListener('click', () => {
+        if (selectedSegment !== null) {
+            saveState();
+            const deletedSegmentWidth = segments[selectedSegment].width;
+            segments.splice(selectedSegment, 1);
+
+            // Adjust the positions of remaining segments to close the gap
+            for (let i = selectedSegment; i < segments.length; i++) {
+                segments[i].start -= deletedSegmentWidth;
+            }
+
+            drawSegments();
+            colorPicker.style.display = 'none';
+        }
+    });
+
+    // Close color picker
+    document.getElementById('closeColorPicker').addEventListener('click', () => {
+        colorPicker.style.display = 'none';
+    });
+
+    // Save the current state to localStorage
+    document.getElementById('saveBtn').addEventListener('click', () => {
+        const data = {
+            segments,
+            textBoxes: textBoxes.map(tb => ({ text: tb.innerText, x: tb.style.left, y: tb.style.top }))
+        };
+        localStorage.setItem('barData', JSON.stringify(data));
+    });
+
+    // Load the state from localStorage
+    document.getElementById('loadBtn').addEventListener('click', () => {
+        const savedData = localStorage.getItem('barData');
+        if (savedData) {
+            const { segments: savedSegments, textBoxes: savedTextBoxes } = JSON.parse(savedData);
+            segments = savedSegments;
+
+            // Clear and reload text boxes
+            textBoxes.forEach(tb => tb.remove());
+            textBoxes = [];
+            savedTextBoxes.forEach(({ text, x, y }) => {
+                const textBox = createTextBox(text, x, y);
+                textBoxes.push(textBox);
+            });
+
+            drawSegments();
+        }
+    });
+
+    // Create a text box
     function createTextBox(text, x, y) {
         const textBox = document.createElement('div');
         textBox.className = 'label-text';
         textBox.contentEditable = true;
         textBox.innerText = text || 'Label';
         textBox.style.left = x || '100px';
-        textBox.style.top = y || '500px';
+        textBox.style.top = y || '200px';
         document.body.appendChild(textBox);
 
-        // Enable dragging of text box
-        textBox.addEventListener('mousedown', () => {
-            saveState();  // Save state before dragging text box
-            draggingText = textBox;
+        // Handle dragging of text boxes
+        textBox.addEventListener('mousedown', (e) => {
+            saveState();
+            draggingTextBox = textBox;
+            const shiftX = e.clientX - textBox.getBoundingClientRect().left;
+            const shiftY = e.clientY - textBox.getBoundingClientRect().top;
+
+            function onMouseMove(e) {
+                textBox.style.left = e.pageX - shiftX + 'px';
+                textBox.style.top = e.pageY - shiftY + 'px';
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+
+            document.addEventListener('mouseup', () => {
+                document.removeEventListener('mousemove', onMouseMove);
+            }, { once: true });
         });
 
-        // Delete label on double-click
+        // Handle double-click to delete text box
         textBox.addEventListener('dblclick', () => {
             textBox.remove();
-            const index = textBoxes.indexOf(textBox);
-            if (index > -1) {
-                textBoxes.splice(index, 1);
-            }
+            textBoxes = textBoxes.filter(tb => tb !== textBox);
         });
 
         return textBox;
@@ -401,73 +491,6 @@
     document.getElementById('addTextBox').addEventListener('click', () => {
         const textBox = createTextBox();
         textBoxes.push(textBox);
-    });
-
-    // Handle text box dragging stop
-    document.addEventListener('mouseup', () => {
-        draggingText = null;
-    });
-
-    // Hide color picker when user selects a color
-    document.querySelectorAll('.color-picker div').forEach(colorBox => {
-        colorBox.addEventListener('click', (e) => {
-            if (selectedSegment) {
-                saveState();  // Save state before changing color
-                selectedSegment.color = e.target.style.backgroundColor;
-                drawSegments();
-            }
-            colorPicker.style.display = 'none';
-        });
-    });
-
-    // Delete segment when the delete button is clicked
-    document.getElementById('deleteSegment').addEventListener('click', () => {
-        if (selectedSegment) {
-            let index = segments.indexOf(selectedSegment);
-            saveState();  // Save state before deleting
-            segments.splice(index, 1);
-
-            // Adjust the positions of the remaining segments to close the gap
-            for (let i = index; i < segments.length; i++) {
-                segments[i].start -= selectedSegment.width;
-            }
-
-            drawSegments();
-            colorPicker.style.display = 'none';
-        }
-    });
-
-    // Close color picker manually
-    document.getElementById('closeColorPicker').addEventListener('click', () => {
-        colorPicker.style.display = 'none';
-    });
-
-    // Save button functionality
-    document.getElementById('saveBtn').addEventListener('click', () => {
-        const data = {
-            segments,
-            textBoxes: textBoxes.map(tb => ({ text: tb.innerText, x: tb.style.left, y: tb.style.top }))
-        };
-        localStorage.setItem('barData', JSON.stringify(data));
-    });
-
-    // Load button functionality
-    document.getElementById('loadBtn').addEventListener('click', () => {
-        const savedData = localStorage.getItem('barData');
-        if (savedData) {
-            const { segments: savedSegments, textBoxes: savedTextBoxes } = JSON.parse(savedData);
-            segments = savedSegments;
-
-            // Clear existing text boxes and reload them from saved state
-            textBoxes.forEach(tb => tb.remove());
-            textBoxes.length = 0;
-            savedTextBoxes.forEach(({ text, x, y }) => {
-                const textBox = createTextBox(text, x, y);
-                textBoxes.push(textBox);
-            });
-
-            drawSegments();
-        }
     });
 
     // Initial draw
