@@ -502,6 +502,77 @@
 
     // Initial draw
     drawSegments();
+
+    function saveToFile(data, fileName) {
+        const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+    // Save the current state (including the canvas drawings, segments, and text boxes)
+    document.getElementById('saveBtn').addEventListener('click', () => {
+        const fileName = prompt("Enter a file name to save:", "barData.json");
+        if (fileName) {
+            // Save the canvas (pen tool) drawing as a base64 image
+            const canvasDataUrl = bufferCanvas.toDataURL();
+
+            const data = {
+                segments: segments,
+                textBoxes: textBoxes.map(tb => ({
+                    text: tb.innerText,
+                    x: tb.style.left,
+                    y: tb.style.top
+                })),
+                canvasDataUrl: canvasDataUrl // Save pen tool drawing as a base64 image
+            };
+            saveToFile(data, fileName);
+        }
+    });
+
+    // Load the state from a selected file (including canvas drawings, segments, and text boxes)
+    document.getElementById('loadBtn').addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+
+        input.onchange = function (event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const result = e.target.result;
+                const loadedData = JSON.parse(result);
+
+                // Load segments
+                segments = loadedData.segments;
+
+                // Clear existing text boxes and reload them
+                textBoxes.forEach(tb => tb.remove());
+                textBoxes = [];
+                loadedData.textBoxes.forEach(({ text, x, y }) => {
+                    const textBox = createTextBox(text, x, y);
+                    textBoxes.push(textBox);
+                });
+
+                // Restore the canvas (pen tool) drawing
+                const img = new Image();
+                img.onload = function () {
+                    bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height); // Clear canvas
+                    bufferCtx.drawImage(img, 0, 0); // Restore the drawing from base64 image
+                    drawSegments(); // Redraw segments and labels
+                };
+                img.src = loadedData.canvasDataUrl;
+
+                alert("File loaded successfully!");
+            };
+            reader.readAsText(file);
+        };
+
+        input.click();
+    });
+
 </script>
 
 </body>
